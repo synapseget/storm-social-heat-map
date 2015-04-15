@@ -24,12 +24,20 @@
 
 
     <dependencies>
+
         <dependency>
             <groupId>org.apache.storm</groupId>
             <artifactId>storm-core</artifactId>
             <version>0.9.2-incubating</version>
             <!-- <scope>provided</scope> -->
         </dependency>
+
+        <dependency>
+            <groupId>com.google.code.geocoder-java</groupId>
+            <artifactId>geocoder-java</artifactId>
+            <version>0.16</version>
+        </dependency>
+
     </dependencies>
 
 
