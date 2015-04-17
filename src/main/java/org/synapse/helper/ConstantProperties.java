@@ -9,7 +9,7 @@ public interface ConstantProperties {
 
     public final String USER_HOME = "user.home";
 
-    public final String CHECKIN_FILE_PATH = "social-heat-map/src/main/resources/checkin-data/checkins.txt";
+    public final String CHECKIN_FILE_PATH = "social-heat-map/src/main/resources/checkin-data/checkins-test.txt";
 
     public final String USER_CHECKIN_SPOUT = "user-checkin-input";
 
