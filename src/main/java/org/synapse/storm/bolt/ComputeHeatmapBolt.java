@@ -1,10 +1,16 @@
 package org.synapse.storm.bolt;
 
+import backtype.storm.Config;
+import backtype.storm.Constants;
 import backtype.storm.task.OutputCollector;
 import backtype.storm.task.TopologyContext;
+import backtype.storm.topology.BasicOutputCollector;
 import backtype.storm.topology.OutputFieldsDeclarer;
+import backtype.storm.topology.base.BaseBasicBolt;
 import backtype.storm.topology.base.BaseRichBolt;
+import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Tuple;
+import backtype.storm.tuple.Values;
 import com.google.code.geocoder.model.LatLng;
 import org.synapse.helper.AddressConverter;
 import org.synapse.helper.ConstantProperties;
@@ -14,35 +20,31 @@ import java.util.*;
 /**
  * Created by developer on 10/4/15.
  */
-public class ComputeHeatmapBolt extends BaseRichBolt implements ConstantProperties {
+public class ComputeHeatmapBolt extends BaseBasicBolt {
 
     Map<String, Integer> heatMap = new HashMap<String, Integer>();
 
-    @Override
-    public void prepare(Map map, TopologyContext topologyContext, OutputCollector outputCollector) {
+    Map <Long,List<LatLng>> heatMaps;
 
+    @Override
+    public void prepare(Map map, TopologyContext topologyContext) {
+        heatMaps = new HashMap<>();
     }
 
     @Override
-    public void execute(Tuple tuple) {
-
+    public void execute(Tuple tuple,BasicOutputCollector basicOutputCollector) {
+         System.out.println("hello");
         try {
-            String location = tuple.getStringByField(CHECKIN);
-            if (heatMap.containsKey(location)) {
-                heatMap.put(location, heatMap.get(location) + 1);
+            if(isTickTuple(tuple)) {
+                emitHeatMap(basicOutputCollector);
+                return;
             } else {
-                heatMap.put(location, 1);
+                LatLng latLng = (LatLng) tuple.getValueByField("geocode");
+                Long timeInterval = selectTimeInterval(tuple.getLongByField("time"));
+                List<LatLng> checkins = getCheckinForInterval(timeInterval);
+                //checkins.add(new AddressConverter(location).getLatLng());
+                checkins.add(latLng);
             }
-            Map sortedHeatMap = sortByValue(heatMap);
-            System.out.println(sortedHeatMap);
-            List hotZoneAsLatLong = new ArrayList();
-            for (Object zone : sortedHeatMap.keySet()) {
-                LatLng zoneLatLng = new AddressConverter((String) zone).getLatLng();
-                if(zoneLatLng != null) {
-                    hotZoneAsLatLong.add(zoneLatLng.getLat() +","+ zoneLatLng.getLng() );
-                }
-            }
-            System.out.println(hotZoneAsLatLong);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -52,24 +54,50 @@ public class ComputeHeatmapBolt extends BaseRichBolt implements ConstantProperti
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {
+        outputFieldsDeclarer.declare(new Fields("time-interval","hotzones"));
 
     }
 
-    public Map sortByValue(Map map) {
-        List list = new LinkedList(map.entrySet());
-        Collections.sort(list, new Comparator<Object>() {
-            public int compare(Object o1, Object o2) {
-                return ((Comparable) ((Map.Entry) (o1)).getValue())
-                        .compareTo(((Map.Entry) (o2)).getValue());
-            }
-        });
+    private Long selectTimeInterval(Long time) {
+        return time / (60 * 1000);
+    }
 
-        Map result = new LinkedHashMap();
-        for (Iterator it = list.iterator(); it.hasNext(); ) {
-            Map.Entry entry = (Map.Entry) it.next();
-            result.put(entry.getKey(), entry.getValue());
+    private boolean isTickTuple(Tuple tuple) {
+        boolean isTickTupple = tuple.getSourceComponent().equals(Constants.SYSTEM_COMPONENT_ID)
+                && tuple.getSourceStreamId().equals(Constants.SYSTEM_TICK_STREAM_ID);
+        System.out.println(isTickTupple);
+        return tuple.getSourceComponent().equals(Constants.SYSTEM_COMPONENT_ID)
+                && tuple.getSourceStreamId().equals(Constants.SYSTEM_TICK_STREAM_ID);
+    }
+
+    private List<LatLng> getCheckinForInterval(Long interval) {
+        List<LatLng> hotzones = heatMaps.get(interval);
+        if(hotzones == null) {
+            hotzones = new ArrayList<>();
+            heatMaps.put(interval,hotzones);
         }
-        return result;
+        return hotzones;
+    }
+
+    private void emitHeatMap(BasicOutputCollector outputCollector) {
+        Long emitUptoInterval = selectTimeInterval(System.currentTimeMillis());
+        Set<Long> intervalAvailable = heatMaps.keySet();
+
+        for (Long interval : intervalAvailable) {
+            if(interval <= emitUptoInterval) {
+                List<LatLng> hotzones = heatMaps.get(interval);
+                outputCollector.emit(new Values(interval,hotzones));
+                // System.out.println("interval="+interval);
+                //System.out.println("hotzones="+hotzones);
+            }
+        }
+    }
+   @Override
+    public Map<String,Object> getComponentConfiguration(){
+        Config conf = new Config();
+        conf.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS,300);
+
+        return conf;
     }
 
 }

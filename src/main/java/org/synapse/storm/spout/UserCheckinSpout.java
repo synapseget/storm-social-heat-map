@@ -12,33 +12,32 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by developer on 9/4/15.
  */
-public class UserCheckinSpout extends BaseRichSpout implements ConstantProperties {
+public class UserCheckinSpout extends BaseRichSpout{
 
     private SpoutOutputCollector spoutOutputCollector;
 
-    private List<String> checkins = new ArrayList<String>();
+    private Map<Long,String> checkins = new HashMap<>();
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {
-        outputFieldsDeclarer.declare(new Fields(CHECKIN));
+        outputFieldsDeclarer.declare(new Fields("time",ConstantProperties.CHECKIN));
     }
 
     @Override
     public void open(Map map, TopologyContext topologyContext, SpoutOutputCollector spoutOutputCollector) {
         this.spoutOutputCollector = spoutOutputCollector;
         try {
-            BufferedReader bufferedReader = new BufferedReader(new FileReader(System.getProperty(USER_HOME)+ "/development/workspace/"+ CHECKIN_FILE_PATH));
+            BufferedReader bufferedReader = new BufferedReader(new FileReader(System.getProperty(ConstantProperties.USER_HOME)+ "/development/workspace/"+ ConstantProperties.CHECKIN_FILE_PATH));
             try {
                 String currentCheckin;
                 while((currentCheckin = bufferedReader.readLine()) != null) {
-                    checkins.add(currentCheckin);
+                    String[] checkin = currentCheckin.split(",",2);
+                    checkins.put((Long.parseLong(checkin[0])),checkin[1]);
                 }
 
             } catch (IOException e) {
@@ -51,8 +50,8 @@ public class UserCheckinSpout extends BaseRichSpout implements ConstantPropertie
 
     @Override
     public void nextTuple() {
-        for(String checkin : checkins) {
-            spoutOutputCollector.emit(new Values(checkin));
+        for (Map.Entry<Long, String> entry : checkins.entrySet()) {
+            spoutOutputCollector.emit(new Values(entry.getKey(),entry.getValue()));
         }
     }
 }
